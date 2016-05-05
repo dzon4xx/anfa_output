@@ -26,7 +26,7 @@ uint8_t SPIClass::interruptSave = 0;
 #define SPI_OUT_PORT PORTB
 
 #define SS_PIN_BIT (1<<PINB2)
-#define MISO_PIN_BIT (1<<PINB3)
+#define MOSI_PIN_BIT (1<<PINB3)
 #define SCK_PIN_BIT (1<<PINB5)
 
  SPIClass::SPIClass()
@@ -41,8 +41,8 @@ void SPIClass::begin()
 {
     // if the SS pin is not already configured as an output
     // then set it high (to enable the internal pull-up resistor)
-    SPI_DIR_PORT |= (SS_PIN_BIT | MISO_PIN_BIT | SCK_PIN_BIT);
-	SPI_OUT_PORT |= SS_PIN_BIT;
+    SPI_DIR_PORT |= (SS_PIN_BIT | MOSI_PIN_BIT | SCK_PIN_BIT);
+	//SPI_OUT_PORT |= SS_PIN_BIT;
     // When the SS pin is set as OUTPUT, it can be used as
     // a general purpose output port (it doesn't influence
     // SPI operations).

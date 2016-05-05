@@ -14,9 +14,11 @@
 #include "communication/modbus/modbus_slave.h"
 #include "communication/spi/SPI.h"
 
-#define SPI_START_COM 2
-#define ACK 1
-
+#define SPI_START_COM 255
+//#define SPI_END_COM 254
+#define ACK 253
+uint8_t rel_num;
+uint8_t state;
 int main(void)
 {
 	cli();
@@ -43,34 +45,22 @@ int main(void)
 		if(write_coil1->new_packet_pending)
 		{
 			write_coil1->new_packet_pending = false;
-			for (uint8_t rel_num=0; rel_num < NUM_OF_CHANNELS; rel_num++)
+			for (rel_num=0; rel_num < NUM_OF_CHANNELS; rel_num++)
 			{				
 				Out_pin *crnt_rel = rels[rel_num];
-				if (write_coil1->regs[rel_num] == 0)
+				state = (write_coil1->regs[rel_num]>0 ? 1 : 0);
+				if (state == 0)
 				{
 					crnt_rel->low();
 				} 
 				else
 				{
 					crnt_rel->high();
-				}				
-			}
-			uint8_t top_response = SPI->transfer(SPI_START_COM);
-			if (top_response == ACK)
-			{
-				for (uint8_t rel_num=0; rel_num < NUM_OF_CHANNELS; rel_num++)
-				{
-					if (write_coil1->regs[rel_num] == 0)
-					{
-						SPI->transfer(1);
-					}
-					else
-					{
-						SPI->transfer(0);
-					}
 				}
-			}
-			
+				SPI->transfer(SPI_START_COM);
+				SPI->transfer(rel_num);
+				SPI->transfer(state);
+			}			
 		}
     }
 }
