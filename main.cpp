@@ -12,14 +12,10 @@
 #include "utilities/io/pin/pin.h"
 #include "utilities/clock/clock.h"
 #include "communication/modbus/modbus_slave.h"
-#include "communication/spi/top_gate.h"
+#include "communication/spi/SPI.h"
 
-
-#ifdef ATMEGA328
-#define MAX_PORT 'd'
-#define MAX_PIN	2
-#endif
-
+#define SPI_START_COM 2
+#define ACK 1
 
 int main(void)
 {
@@ -36,11 +32,11 @@ int main(void)
 	Out_pin rel10('c', 0);
 	Out_pin *rels[NUM_OF_CHANNELS] = {&rel1, &rel2, &rel3, &rel4, &rel5, &rel6, &rel7, &rel8, &rel9, &rel10};
 
-	frame = new Frame(MAX_PORT, MAX_PIN);
+	frame = new Frame('d', 2);
 	write_coil1 = new Modbus_write_coil;
+	SPI = new SPIClass;
 	clock = new Clock;
 	clock->start();
-	Top_gate top_gate;
 	sei();
     while (1) 
     {
@@ -59,7 +55,22 @@ int main(void)
 					crnt_rel->high();
 				}				
 			}
-			top_gate.transmit(write_coil1->regs);
+			uint8_t top_response = SPI->transfer(SPI_START_COM);
+			if (top_response == ACK)
+			{
+				for (uint8_t rel_num=0; rel_num < NUM_OF_CHANNELS; rel_num++)
+				{
+					if (write_coil1->regs[rel_num] == 0)
+					{
+						SPI->transfer(1);
+					}
+					else
+					{
+						SPI->transfer(0);
+					}
+				}
+			}
+			
 		}
     }
 }

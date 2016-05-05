@@ -69,7 +69,9 @@
  //Link layers settings settings
  #define MS_BETWEEN_FRAMES 5
  //Link layers settings settings
-        
+       
+ #define BAUD_PRESCALE (((( 16000000 / 16) + ( DEFAULT_BAUDE_RATE / 2) ) / ( DEFAULT_BAUDE_RATE )) - 1)
+	    
       
  Frame::Frame(uint8_t port_letter, uint8_t pin_num)
 {
@@ -81,11 +83,12 @@
 
 uint8_t Frame::read_byte()
 {
-	 uint8_t in_byte =  *this->udr_port;
+	 uint8_t in_byte =  UDR0;
 	 unsigned long byte_arrival_t = clock->get_ms();		// Czas nadejscia bajtu wyrazony w ilosci zliczen timera 1
 	 if (byte_arrival_t-this->last_byte_arrival_t>MS_BETWEEN_FRAMES)
 	 {
 		 this->is_new = true;
+		 this->in_bytes_counter = 0;
 	 }
 	 this->last_byte_arrival_t = byte_arrival_t;
 
@@ -127,7 +130,7 @@ void Frame::send(uint8_t size)
 	this->send_mode();
 	for (uint8_t i = 0; i < size; i++)
 	{
-		*(this->udr_port) = this->data[i];
+		UDR0 = this->data[i];
 		delay_us(T1_5);
 	}
 	this->listen_mode();
@@ -148,18 +151,11 @@ void Frame::exception_response(uint8_t function, uint8_t exception)
 
 void Frame::set_UART()
 {
-	#define BAUD_PRESCALE (((( 16000000 / 16) + ( DEFAULT_BAUDE_RATE / 2) ) / ( DEFAULT_BAUDE_RATE )) - 1)
-
-
-#ifdef ATMEGA328
-
-	 	UCSR0B = (1 << RXEN0) | (1 << TXEN0); // Turn on the transmission and reception circuitry
-	 	UCSR0C = (1 << UMSEL01) | (1 << UCSZ00) | (1 << UCSZ01); // Use 8- bit character sizes
-	 	UBRR0H = (BAUD_PRESCALE>>8);
-	 	UBRR0L = (BAUD_PRESCALE);
-	 	UCSR0B |= (1 << RXCIE0);	//Zezwolenie na przerwania od UART
-
-#endif
+	UCSR0B = (1 << RXEN0) | (1 << TXEN0); // Turn on the transmission and reception circuitry
+	UCSR0C = (1 << UMSEL01) | (1 << UCSZ00) | (1 << UCSZ01); // Use 8- bit character sizes
+	UBRR0H = (BAUD_PRESCALE>>8);
+	UBRR0L = (BAUD_PRESCALE);
+	UCSR0B |= (1 << RXCIE0);	//Zezwolenie na przerwania od UART
 }
 
 void Frame::listen_mode()
@@ -267,14 +263,16 @@ uint16_t Frame::calculate_CRC(uint8_t size)
  Modbus_write_coil *write_coil1;
 
  ISR(USART_RX_vect)
-
  {
 	 uint8_t in_byte = frame->read_byte();
 	 if(frame->is_new)
 	 {
 		frame->check_length(in_byte);
-		frame->data[frame->in_bytes_counter] = in_byte; // zapisuj bajty zapytania
-		frame->in_bytes_counter++;
+		if (frame->in_bytes_counter<BUFFER_SIZE)
+		{
+			frame->data[frame->in_bytes_counter] = in_byte; // zapisuj bajty zapytania
+		}
+			frame->in_bytes_counter++;
 		if (frame->in_bytes_counter==frame->length)
 		{
 			frame->in_bytes_counter=0;

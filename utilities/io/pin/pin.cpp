@@ -9,22 +9,13 @@
 #include "pin.h"
 #include "../../../settings.h"
 
-#ifdef ATMEGA32U4
-#define NUM_OF_PORTS 5
-uint8_t port_letters[]	=	{'b', 'c', 'd', 'e', 'f'};
-volatile uint8_t *out_ports[]	= {&PORTB, &PORTC, &PORTD, &PORTE, &PORTF};
-volatile uint8_t *in_ports[]	= {&PINB, &PINC, &PIND, &PINE, &PINF};
-volatile uint8_t *dir_ports[]	= {&DDRB, &DDRC, &DDRD, &DDRE, &DDRF};
 
-#endif
 
-#ifdef ATMEGA328
 #define NUM_OF_PORTS 3
 uint8_t port_letters[]	=	{'b', 'c', 'd'};
 volatile uint8_t *out_ports[]	= {&PORTB, &PORTC, &PORTD};
 volatile uint8_t *in_ports[]	= {&PINB, &PINC, &PIND};
 volatile uint8_t *dir_ports[]	= {&DDRB, &DDRC, &DDRD};
-#endif
 
 uint8_t Pin::get_port_letter()
 {
