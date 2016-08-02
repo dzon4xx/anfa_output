@@ -38,10 +38,11 @@ public:
 	volatile uint8_t* get_out_port();
 
 	//Ustawia pin w stan wysoki
-	void high();
+	inline void on(){ *(out_port) |= pin_mask; }
 
-	//Ustawia pin w stan wysoki
-	void low();
+	//Ustawia pin w stan niski
+	inline void off(){ *(out_port) &= ~pin_mask; }
+
 private:
 
 	//Rejestr wyjsciowy PORTX

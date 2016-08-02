@@ -10,7 +10,6 @@
 #include "../../../settings.h"
 
 
-
 #define NUM_OF_PORTS 3
 uint8_t port_letters[]	=	{'b', 'c', 'd'};
 volatile uint8_t *out_ports[]	= {&PORTB, &PORTC, &PORTD};
@@ -30,26 +29,16 @@ uint8_t Pin::get_pin_mask()
 
  Out_pin::Out_pin(uint8_t port_letter, uint8_t pin_num)
  {
-	pin_mask = (1<<pin_num);
-	this->port_letter = port_letter;
-	for(uint8_t i=0; i<NUM_OF_PORTS; i++)
-	{
-		if (port_letter == port_letters[i])
-		{
-			out_port = out_ports[i];
-			*dir_ports[i] |= pin_mask;
-			break;
-		}
-	}
+	 this->pin_mask = (1<<pin_num);
+	 this->port_letter = port_letter;
+	 for(uint8_t i=0; i<NUM_OF_PORTS; i++)
+	 {
+		 if (port_letter == port_letters[i])
+		 {
+			 out_port = out_ports[i];
+			 *dir_ports[i] |= pin_mask;
+			 break;
+		 }
+	 }
  }
-
-void Out_pin::high()
-{
-	*(out_port) |= pin_mask;
-}
-
-void Out_pin::low()
-{
-	*(out_port) &= ~pin_mask;
-}
 
