@@ -52,4 +52,5 @@ Clock *clock;
 ISR (TIMER0_COMPA_vect) 
 {
 	miliseconds_passed++;
+	TCNT0 = 0;
 }

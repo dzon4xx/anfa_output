@@ -12,7 +12,6 @@
 #include "../../utilities/io/pin/pin.h"
 #include "../../settings.h"
 
-#include <avr/io.h>
 #include <avr/interrupt.h>
 #include <util/delay.h>
 
@@ -65,27 +64,26 @@
  #define EXCEPTION_SLAVE_DEVICE_BUSY 6
  #define EXCEPTION_CRC_ERROR 8
  //Exceptions
-
- //Link layers settings settings
- #define MS_BETWEEN_FRAMES 5
- //Link layers settings settings
        
- #define BAUD_PRESCALE (((( 16000000 / 16) + ( DEFAULT_BAUDE_RATE / 2) ) / ( DEFAULT_BAUDE_RATE )) - 1)
-	    
-      
- Frame::Frame(uint8_t port_letter, uint8_t pin_num)
+ //#define BAUD_PRESCALE (((F_CPU / (BAUDRATE * 16))) - 1)
+
+uint32_t BAUDRATE = 38400;
+uint32_t BAUD_PRESCALE = (((F_CPU / (BAUDRATE * 16))) - 1);
+	          
+ Frame::Frame()
 {
-	 this->pin = new Out_pin(port_letter, pin_num);
+	 this->pin = new Out_pin('d', 2);
  	 this->listen_mode();
- 	 this->calculate_time_outs(DEFAULT_BAUDE_RATE);
- 	 this->set_UART();
+ 	 this->init_UART();
  }
 
 uint8_t Frame::read_byte()
 {
+
 	 uint8_t in_byte =  UDR0;
+
 	 unsigned long byte_arrival_t = clock->get_ms();		// Czas nadejscia bajtu wyrazony w ilosci zliczen timera 1
-	 if (byte_arrival_t-this->last_byte_arrival_t>MS_BETWEEN_FRAMES)
+	 if (byte_arrival_t-this->last_byte_arrival_t>this->T3_5_ms)
 	 {
 		 this->is_new = true;
 		 this->in_bytes_counter = 0;
@@ -124,17 +122,6 @@ void Frame::check_length(uint8_t in_byte)
 	 }
 }
 
-void Frame::send(uint8_t size)
-{
-	if (size >= BUFFER_SIZE){size = BUFFER_SIZE;}
-	this->send_mode();
-	for (uint8_t i = 0; i < size; i++)
-	{
-		UDR0 = this->data[i];
-		delay_us(T1_5);
-	}
-	this->listen_mode();
-}
 
 void Frame::exception_response(uint8_t function, uint8_t exception)
 {
@@ -146,40 +133,40 @@ void Frame::exception_response(uint8_t function, uint8_t exception)
 	 this->data[4] = crc16 & 0xFF;
 	 // exception response is always 5 bytes
 	 // ID, function + 0x80, exception code, 2 bytes crc
-	 this->send(5);
+	 this->send_mode(5);
 }
 
-void Frame::set_UART()
+void Frame::init_UART()
 {
+	cli();
 	UCSR0B = (1 << RXEN0) | (1 << TXEN0); // Turn on the transmission and reception circuitry
 	UCSR0C = (1 << UMSEL01) | (1 << UCSZ00) | (1 << UCSZ01); // Use 8- bit character sizes
+
 	UBRR0H = (BAUD_PRESCALE>>8);
 	UBRR0L = (BAUD_PRESCALE);
-	UCSR0B |= (1 << RXCIE0);	//Zezwolenie na przerwania od UART
+	UCSR0B |= (1 << RXCIE0) | (1<< TXCIE0);	//Zezwolenie na przerwania od UART
+	sei();
 }
 
 void Frame::listen_mode()
 {
-	pin->low();
+	this->pin->off();
 }
 
-void Frame::send_mode()
+void Frame::send_mode(uint8_t response_frame_size)
 {
-	pin->high();
+	this->pin->on();
+	if (response_frame_size >= BUFFER_SIZE){response_frame_size = BUFFER_SIZE;}
+	this->send_data_size = response_frame_size;
+
+	UDR0 = this->data[this->send_data_pointer];
+	this->send_data_pointer++;
 }
 
-void Frame::calculate_time_outs(uint32_t baude_rate)
+void Frame::calculate_time_outs(uint32_t baudrate)
 {
-	 if (baude_rate > 19200)
-	 {
-		 this->T1_5 = 750;
-		 this->T3_5 = 1750;
-	 }
-	 else
-	 {
-		 this->T1_5 = 15000000/baude_rate; // 1T * 1.5 = T1.5
-		 this->T3_5 = 35000000/baude_rate; // 1T * 3.5 = T3.5
-	 }
+	this->T3_5_ms =  uint8_t(9*3.5*1000/baudrate); // 9 bits per char. 3.5 chars. 1000ms in s
+	this->T3_5_us =  this->T3_5_ms*1000; // 9 bits per char. 3.5 chars. 1000ms in s
 }
 
 uint16_t Frame::calculate_CRC(uint8_t size)
@@ -206,30 +193,27 @@ uint16_t Frame::calculate_CRC(uint8_t size)
 	return temp;	 
 }
 
- Frame *frame;
-
+void Modbus_write::populate_regs_with_frame(uint8_t data[], uint8_t no_of_coils)
+{
+	//sprawdz pierwszy bajt
+	uint8_t mask = 0;
+	for(uint8_t coil_num=0; coil_num<no_of_coils; coil_num++)
+	{
+		mask = (1<<coil_num);
+		this->regs[coil_num] = data[0] & mask;
+	}
+	if (no_of_coils>8)	//sprawdz drugi bajt
+	{
+		mask = 0;
+		for(uint8_t coil_num=8; coil_num<no_of_coils; coil_num++)
+		{
+			mask = (1<<(coil_num-8));
+			this->regs[coil_num] = data[1] & mask;
+		}
+	}
+}
  
  Modbus_write_coil::Modbus_write_coil(){}
-
- void Modbus_write_coil::populate_regs_with_frame(uint8_t data[], uint8_t no_of_coils)
- {
-	 //sprawdz pierwszy bajt
-	 uint8_t mask = 0;
-	 for(uint8_t coil_num=0; coil_num<no_of_coils; coil_num++)
-	 {
-		 mask = (1<<coil_num);
-		 this->regs[coil_num] = data[0] & mask;
-	 }
-	 if (no_of_coils>8)	//sprawdz drugi bajt
-	 {
-		 mask = 0;
-		 for(uint8_t coil_num=8; coil_num<no_of_coils; coil_num++)
-		 {
-			 mask = (1<<(coil_num-8));
-			 this->regs[coil_num] = data[1] & mask;
-		 }
-	 }
- }
 
  void Modbus_write_coil::write_coils()
  {
@@ -251,7 +235,7 @@ uint16_t Frame::calculate_CRC(uint8_t size)
 				 data[6] = crc16 >> 8; // split crc into 2 bytes
 				 data[7] = crc16 & 0xFF;
 
-				 frame->send(8); // a function 16 response is an echo of the first 6 bytes from the request + 2 crc bytes
+				 frame->send_mode(8); // a function 16 response is an echo of the first 6 bytes from the request + 2 crc bytes
 
 				 this->new_packet_pending = true;		
 		 }
@@ -260,11 +244,14 @@ uint16_t Frame::calculate_CRC(uint8_t size)
 	 else{frame->exception_response(FUN_WRITE_REGS, EXCEPTION_CRC_ERROR);} // exception 1 ILLEGAL FUNCTION
  }
 
+  Frame *frame;
+
  Modbus_write_coil *write_coil1;
 
  ISR(USART_RX_vect)
  {
 	 uint8_t in_byte = frame->read_byte();
+
 	 if(frame->is_new)
 	 {
 		frame->check_length(in_byte);
@@ -272,7 +259,8 @@ uint16_t Frame::calculate_CRC(uint8_t size)
 		{
 			frame->data[frame->in_bytes_counter] = in_byte; // zapisuj bajty zapytania
 		}
-			frame->in_bytes_counter++;
+		frame->in_bytes_counter++;
+
 		if (frame->in_bytes_counter==frame->length)
 		{
 			frame->in_bytes_counter=0;
@@ -295,6 +283,18 @@ uint16_t Frame::calculate_CRC(uint8_t size)
 	 }	 
  }
  
+ ISR(USART_TX_vect){
+	if (frame->send_data_pointer < frame->send_data_size){
+	    *(frame->uart_port) = frame->data[frame->send_data_pointer];
+		frame->send_data_pointer++;
+	}
+  	else if(frame->send_data_pointer >= frame->send_data_size){
+		frame->send_data_pointer = 0;
+	  	frame->listen_mode();
+  	}
+}
+  
+
 
 
 
